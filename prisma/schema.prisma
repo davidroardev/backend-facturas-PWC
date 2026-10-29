@@ -1,0 +1,98 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Usuario {
+  id            Int         @id @default(autoincrement())
+  nombre        String
+  correo        String      @unique
+  contrasena    String
+  telefono      String?
+  fechaCreacion DateTime    @default(now()) @map("fecha_creacion")
+  facturas      Factura[]
+  logs          LogApi[]
+
+  @@map("usuarios")
+}
+
+model TipoFactura {
+  id            Int         @id @default(autoincrement())
+  servicioOTipo String      @unique @map("servicio_o_tipo")
+  estado        Boolean     @default(true)
+  fechaCreacion DateTime    @default(now()) @map("fecha_creacion")
+  facturas      Factura[]
+
+  @@map("tipos_factura")
+}
+
+model Proveedor {
+  id        Int       @id @default(autoincrement())
+  nombre    String
+  nit       String?   @unique
+  direccion String?
+  telefono  String?
+  facturas  Factura[]
+
+  @@map("proveedores")
+}
+
+model Documento {
+  id                  Int      @id @default(autoincrement())
+  nombreDocumento     String   @map("nombre_documento")
+  tipoDocumento       String   @map("tipo_documento")
+  tamanoBytes         Int      @map("tamano_bytes")
+  fechaCarga          DateTime @default(now()) @map("fecha_carga")
+  respuestaLlm        Json?    @map("respuesta_llm")
+  estadoProcesamiento String   @default("EXITOSO") @map("estado_procesamiento")
+  factura             Factura?
+
+  @@map("documentos")
+}
+
+model Factura {
+  id              Int          @id @default(autoincrement())
+  numeroFactura   String       @map("numero_factura")
+  numeroContrato  String?      @map("numero_contrato")
+  numeroCliente   String?      @map("numero_cliente")
+  valorAPagar     Decimal      @map("valor_a_pagar") @db.Decimal(12, 2)
+  tipoDeMoneda    String       @default("COP") @map("tipo_de_moneda")
+  fechaEmision    DateTime?    @map("fecha_emision") @db.Date
+  fechaLimitePago DateTime?    @map("fecha_limite_pago") @db.Date
+  fechaSubida     DateTime     @default(now()) @map("fecha_subida")
+
+  proveedorId     Int          @map("proveedor_id")
+  proveedor       Proveedor    @relation(fields: [proveedorId], references: [id])
+
+  tipoFacturaId   Int?         @map("tipo_factura_id")
+  tipoFactura     TipoFactura? @relation(fields: [tipoFacturaId], references: [id])
+
+  usuarioSubidaId Int          @map("usuario_subida_id")
+  usuarioSubida   Usuario      @relation(fields: [usuarioSubidaId], references: [id])
+
+  documentoId     Int          @unique @map("documento_id")
+  documento       Documento    @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  @@unique([proveedorId, numeroFactura], name: "uq_proveedor_factura")
+  @@map("facturas")
+}
+
+model LogApi {
+  id           Int      @id @default(autoincrement())
+  usuarioId    Int?     @map("usuario_id")
+  usuario      Usuario? @relation(fields: [usuarioId], references: [id])
+  metodoHttp   String   @map("metodo_http")
+  ruta         String
+  codigoEstado Int      @map("codigo_estado")
+  fechaConsumo DateTime @default(now()) @map("fecha_consumo")
+
+  @@map("logs_api")
+}
