@@ -1,8 +1,101 @@
 import { prisma } from '../config/prisma'
+import { FacturaExtraidaLLM } from './llm.service';
 
 export class FacturaService {
 
-    static async ListarFacturas(query: {
+    static async procesarYGuardarFactura(params: {
+        file: Express.Multer.File;
+        usuarioId: number;
+        datosLLM: FacturaExtraidaLLM;
+        rawJson: any;
+    }) {
+        const { file, usuarioId, datosLLM, rawJson } = params;
+
+        // Transacción atómica en la base de datos
+        return await prisma.$transaction(async (tx) => {
+            // 1. Obtener o crear el proveedor
+            let proveedor = await tx.proveedor.findFirst({
+            where: {
+                OR: [
+                ...(datosLLM.nitProveedor ? [{ nit: datosLLM.nitProveedor }] : []),
+                { nombre: { equals: datosLLM.nombreProveedor, mode: 'insensitive' } },
+                ],
+            },
+            });
+
+            if (!proveedor) {
+                proveedor = await tx.proveedor.create({
+                    data: {
+                        nombre: datosLLM.nombreProveedor,
+                        nit: datosLLM.nitProveedor || null,
+                    },
+                });
+            }
+
+            // 2. Verificar duplicado de factura (proveedor + numero_factura)
+            const facturaExistente = await tx.factura.findUnique({
+                where: {
+                    uq_proveedor_factura: {
+                        proveedorId: proveedor.id,
+                        numeroFactura: datosLLM.numeroFactura,
+                    },
+                },
+            });
+
+            if (facturaExistente) {
+                const error: any = new Error(`La factura N° ${datosLLM.numeroFactura} para el proveedor ${proveedor.nombre} ya existe.`);
+                error.statusCode = 409; // Conflict
+                throw error;
+            }
+
+            // 3. Obtener o crear el tipo de factura / servicio
+            let tipoFactura = null;
+            if (datosLLM.tipoServicio) {
+                    tipoFactura = await tx.tipoFactura.upsert({
+                    where: { servicioOTipo: datosLLM.tipoServicio },
+                    update: {},
+                    create: { servicioOTipo: datosLLM.tipoServicio },
+                });
+            }
+
+            // 4. Crear el registro del documento
+            const documento = await tx.documento.create({
+                data: {
+                    nombreDocumento: file.originalname,
+                    tipoDocumento: file.mimetype,
+                    tamanoBytes: file.size,
+                    respuestaLlm: rawJson,
+                    estadoProcesamiento: 'EXITOSO',
+                },
+            });
+
+            // 5. Crear el registro de la factura asociada
+            const nuevaFactura = await tx.factura.create({
+                data: {
+                    numeroFactura: datosLLM.numeroFactura,
+                    numeroContrato: datosLLM.numeroContrato || null,
+                    numeroCliente: datosLLM.numeroCliente || null,
+                    valorAPagar: datosLLM.valorAPagar,
+                    tipoDeMoneda: datosLLM.tipoDeMoneda || 'COP',
+                    fechaEmision: datosLLM.fechaEmision ? new Date(datosLLM.fechaEmision) : null,
+                    fechaLimitePago: datosLLM.fechaLimitePago ? new Date(datosLLM.fechaLimitePago) : null,
+                    proveedorId: proveedor.id,
+                    tipoFacturaId: tipoFactura ? tipoFactura.id : null,
+                    usuarioSubidaId: usuarioId,
+                    documentoId: documento.id,
+                },
+                include: {
+                    proveedor: true,
+                    tipoFactura: true,
+                    documento: true,
+                },
+            });
+
+            return nuevaFactura;
+        });
+    }
+
+    static async listarFacturas(query: {
         page?: string;
         pageSize?: string;
         proveedorId?: string;

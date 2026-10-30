@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 
 // Importación de rutas
 import authRoutes from './routes/auth.routes';
+import facturaRoutes from './routes/factura.routes';
 
 dotenv.config();
 
@@ -17,6 +18,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Definición de Rutas Principales
 app.use('/api/auth', authRoutes);
+
+app.use('/api/facturas', facturaRoutes);
 
 
 const PORT = process.env.PORT || 3000;
