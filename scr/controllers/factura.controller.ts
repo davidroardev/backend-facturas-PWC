@@ -4,93 +4,65 @@
 import { Request, Response } from 'express';
 import { FacturaService } from '../services/factura.service';
 import { LlmService } from '../services/llm.service';
+import { HttpError } from '../errors/http-error';
 
 export class FacturaController {
 
     static async cargar(req: Request, res: Response) {
-        try {
-            if (!req.file) {
-                return res.status(400).json({ ok: false, mensaje: 'Debe adjuntar un archivo válido (PDF, PNG o JPG).' });
-            }
+        if (!req.file) {
+            throw HttpError.badRequest('Debe adjuntar un archivo válido (PDF, PNG o JPG).', { codigo: 'ARCHIVO_REQUERIDO' });
+        }
 
-            // El id proviene del JWT validado por authMiddleware
-            const usuarioId = (req as any).user?.id;
+        // El id proviene del JWT validado por authMiddleware
+        const usuarioId = (req as any).user?.id;
 
-            if (!usuarioId) {
-                return res.status(401).json({ ok: false, mensaje: 'Usuario no autenticado.' });
-            }
+        if (!usuarioId) {
+            throw HttpError.unauthorized('Usuario no autenticado.');
+        }
 
-            // 1. Invocar extracción del LLM
-            const { datos, rawJson } = await LlmService.extraerDatosFactura(
-                req.file.buffer,
-                req.file.mimetype
-            );
+        // 1. Invocar extracción del LLM
+        const { datos, rawJson } = await LlmService.extraerDatosFactura(
+            req.file.buffer,
+            req.file.mimetype
+        );
 
-            // 2. Guardar en Base de Datos mediante transacción
-            const facturaCreada = await FacturaService.procesarYGuardarFactura({
-                file: req.file,
-                usuarioId,
-                datosLLM: datos,
-                rawJson,
-            });
+        // 2. Guardar en Base de Datos mediante transacción
+        const facturaCreada = await FacturaService.procesarYGuardarFactura({
+            file: req.file,
+            usuarioId,
+            datosLLM: datos,
+            rawJson,
+        });
 
-            res.status(201).json({
-                ok: true,
-                mensaje: 'Factura procesada y guardada exitosamente',
-                factura: facturaCreada,
-            });
-        } catch (error: any) {
-            const statusCode = error.statusCode || 500;
-            res.status(statusCode).json({ ok: false, mensaje: error.message });
-        }     
+        res.status(201).json({
+            ok: true,
+            mensaje: 'Factura procesada y guardada exitosamente',
+            factura: facturaCreada,
+        });
     }
 
-
     static async listar(req: Request, res: Response) {
-        try {
-            const resultado = await FacturaService.listarFacturas(req.query);
-            res.status(200).json({ ok: true, ...resultado });
-        } catch (error: any) {
-            res.status(500).json({ ok: false, mensaje: error.message });
-        }
+        const resultado = await FacturaService.listarFacturas(req.query);
+        res.status(200).json({ ok: true, ...resultado });
     }
 
     static async obtenerDetalle(req: Request, res: Response) {
-        try {
-            const id = Number(req.params.id);
-            const factura = await FacturaService.obtenerPorId(id);
-            res.status(200).json({ ok: true, factura });
-        } catch (error: any) {
-            res.status(404).json({ ok: false, mensaje: error.message });
-        }
+        const factura = await FacturaService.obtenerPorId(Number(req.params.id));
+        res.status(200).json({ ok: true, factura });
     }
 
     static async actualizar(req: Request, res: Response) {
-        try {
-            const id = Number(req.params.id);
-            const facturaActualizada = await FacturaService.actualizarFactura(id, req.body);
-            res.status(200).json({ ok: true, factura: facturaActualizada });
-        } catch (error: any) {
-            res.status(400).json({ ok: false, mensaje: error.message });
-        }
+        const facturaActualizada = await FacturaService.actualizarFactura(Number(req.params.id), req.body);
+        res.status(200).json({ ok: true, factura: facturaActualizada });
     }
 
     static async eliminar(req: Request, res: Response) {
-        try {
-            const id = Number(req.params.id);
-            await FacturaService.eliminarFactura(id);
-            res.status(200).json({ ok: true, mensaje: 'Factura eliminada correctamente' });
-        } catch (error: any) {
-            res.status(400).json({ ok: false, mensaje: error.message });
-        }
+        await FacturaService.eliminarFactura(Number(req.params.id));
+        res.status(200).json({ ok: true, mensaje: 'Factura eliminada correctamente' });
     }
 
     static async reporteResumen(req: Request, res: Response) {
-        try {
-            const reporte = await FacturaService.obtenerReporteResumen();
-            res.status(200).json({ ok: true, reporte });
-        } catch (error: any) {
-            res.status(500).json({ ok: false, mensaje: error.message });
-        }
+        const reporte = await FacturaService.obtenerReporteResumen();
+        res.status(200).json({ ok: true, reporte });
     }
 }

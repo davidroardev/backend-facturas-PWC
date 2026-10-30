@@ -2,6 +2,7 @@
 import 'dotenv/config';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
+import { HttpError } from '../errors/http-error';
 import bcrypt from 'bcrypt';
 
 export interface TokenPayload {
@@ -20,20 +21,18 @@ const OPCIONES_FIRMA: jwt.SignOptions = {
     expiresIn: (process.env.JWT_EXPIRES_IN?.trim() || '8h') as NonNullable<jwt.SignOptions['expiresIn']>,
 };
 
-function errorDeToken(mensaje: string): Error & { statusCode: number } {
-    const error = new Error(mensaje) as Error & { statusCode: number };
-    error.statusCode = 401;
-    return error;
-}
-
 export class AuthService {
     static async registrarUsuario(datos: { nombre: string; correo: string; contrasena: string; telefono?: string }) {
+        if (!datos.nombre || !datos.correo || !datos.contrasena) {
+            throw HttpError.badRequest('nombre, correo y contrasena son obligatorios.', { codigo: 'CAMPOS_REQUERIDOS' });
+        }
+
         const existe = await prisma.usuario.findUnique({
             where: { correo: datos.correo }
         });
 
         if (existe) {
-            throw new Error('El correo ya se encuentra registrado');
+            throw HttpError.conflict('El correo ya se encuentra registrado.', { codigo: 'CORREO_REGISTRADO' });
         }
 
         const salt = await bcrypt.genSalt(10);
@@ -58,19 +57,22 @@ export class AuthService {
     }
 
     static async login(correo: string, contrasena: string) {
-    
+        if (typeof correo !== 'string' || typeof contrasena !== 'string' || !correo || !contrasena) {
+            throw HttpError.badRequest('correo y contrasena son obligatorios.', { codigo: 'CAMPOS_REQUERIDOS' });
+        }
+
         const usuario = await prisma.usuario.findUnique({
             where: { correo }
         });
 
         if (!usuario) {
-            throw new Error('Credenciales inválidas');
+            throw HttpError.unauthorized('Credenciales inválidas.', { codigo: 'CREDENCIALES_INVALIDAS' });
         }
 
         const esValida = await bcrypt.compare(contrasena, usuario.contrasena);
 
         if (!esValida) {
-            throw new Error('Credenciales inválidas');
+            throw HttpError.unauthorized('Credenciales inválidas.', { codigo: 'CREDENCIALES_INVALIDAS' });
         }
 
             return usuario;
@@ -87,7 +89,7 @@ export class AuthService {
         return jwt.sign(payload, JWT_SECRET, OPCIONES_FIRMA);
     }
 
-    /** Verifica la firma y la vigencia del JWT. Lanza error 401 si no es válido. */
+    /** Verifica la firma y la vigencia del JWT. Lanza HttpError 401 si no es válido. */
     static verificarToken(token: string): TokenPayload {
         let decodificado: string | JwtPayload;
 
@@ -95,10 +97,10 @@ export class AuthService {
             decodificado = jwt.verify(token, JWT_SECRET);
         } catch (error) {
             if (error instanceof Error && error.name === 'TokenExpiredError') {
-                throw errorDeToken('El token expiró, inicie sesión nuevamente');
+                throw HttpError.unauthorized('El token expiró, inicie sesión nuevamente.', { codigo: 'TOKEN_EXPIRADO' });
             }
 
-            throw errorDeToken('Token inválido');
+            throw HttpError.unauthorized('Token inválido.', { codigo: 'TOKEN_INVALIDO' });
         }
 
         if (
@@ -107,7 +109,7 @@ export class AuthService {
             typeof decodificado.correo !== 'string' ||
             typeof decodificado.nombre !== 'string'
         ) {
-            throw errorDeToken('Token inválido');
+            throw HttpError.unauthorized('Token inválido.', { codigo: 'TOKEN_INVALIDO' });
         }
 
         return {

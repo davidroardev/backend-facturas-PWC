@@ -1,4 +1,5 @@
 import { prisma } from '../config/prisma'
+import { HttpError } from '../errors/http-error';
 import { FacturaExtraidaLLM } from './llm.service';
 
 export class FacturaService {
@@ -43,9 +44,10 @@ export class FacturaService {
             });
 
             if (facturaExistente) {
-                const error: any = new Error(`La factura N° ${datosLLM.numeroFactura} para el proveedor ${proveedor.nombre} ya existe.`);
-                error.statusCode = 409; // Conflict
-                throw error;
+                throw HttpError.conflict(
+                    `La factura N° ${datosLLM.numeroFactura} para el proveedor ${proveedor.nombre} ya existe.`,
+                    { codigo: 'FACTURA_DUPLICADA' },
+                );
             }
 
             // 3. Obtener o crear el tipo de factura / servicio
@@ -143,7 +145,15 @@ export class FacturaService {
             };
         }
 
+    private static validarId(id: number) {
+        if (!Number.isInteger(id) || id <= 0) {
+            throw HttpError.badRequest('El id debe ser un número entero positivo.', { codigo: 'ID_INVALIDO' });
+        }
+    }
+
     static async obtenerPorId(id: number) {
+        this.validarId(id);
+
         const factura = await prisma.factura.findUnique({
             where: { id },
             include: {
@@ -154,8 +164,8 @@ export class FacturaService {
             }
         });
 
-        if (!factura) throw new Error('Factura no encontrada');
-        
+        if (!factura) throw HttpError.notFound('Factura no encontrada.', { codigo: 'FACTURA_NO_ENCONTRADA' });
+
         return factura;
     }
     
@@ -170,6 +180,8 @@ export class FacturaService {
         tipoFacturaId?: number,
         usuarioSubidaId?: number
     }) {
+        this.validarId(id);
+
         return prisma.factura.update({
             where: { id },
             data
@@ -178,6 +190,8 @@ export class FacturaService {
     }
 
     static async eliminarFactura(id: number) {
+        this.validarId(id);
+
         return await prisma.factura.delete({
             where: {id}
         });

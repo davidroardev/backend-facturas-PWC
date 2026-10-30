@@ -22,7 +22,7 @@ export class LlmService {
         const prompt = `
             Eres un sistema experto en extracción de datos de facturas de servicios públicos y privados.
             Analiza el documento adjunto y extrae los siguientes datos:
-            - numeroFactura (obligatorio) (ten en cuenta que puede estar en diferentes formatos, como "Factura No. 12345", "No. 12345", "Factura #12345",  "EQUIVALENTE ELECTRONICO No. 12345"etc.)
+            - numeroFactura (obligatorio) (ten en cuenta que este numero de factura puede estar en los bordes de la factura y que puede estar en diferentes formatos, como "Factura No. 12345", "No. 12345", "Factura #12345",  "EQUIVALENTE ELECTRONICO No. 12345"etc.)
             - nombreProveedor (obligatorio)(si no lo encuentras responde con un NoEspecificado)
             - valorAPagar (número decimal sin símbolos de moneda ni comas de miles)
             - tipoDeMoneda (código de 3 letras como COP, USD)

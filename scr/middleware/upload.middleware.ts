@@ -1,5 +1,7 @@
+// src/middleware/upload.middleware.ts
 import multer from 'multer';
 import { Request } from 'express';
+import { HttpError } from '../errors/http-error';
 
 
 const storage = multer.memoryStorage();
@@ -11,7 +13,7 @@ const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilt
     cb(null, true);
   } else {
     // 415 Unsupported Media Type
-    cb(new Error('FORMATO_NO_SOPORTADO: Solo se admiten archivos PDF, PNG o JPG.'));
+    cb(HttpError.unsupportedMediaType('Solo se admiten archivos PDF, PNG o JPG.', { codigo: 'FORMATO_NO_SOPORTADO' }));
   }
 };
 

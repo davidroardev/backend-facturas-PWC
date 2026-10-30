@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import facturaRoutes from './routes/factura.routes';
 import { auditMiddleware } from './middleware/audit.middleware';
+import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 
 dotenv.config();
 
@@ -25,6 +26,9 @@ app.use('/api/auth', authRoutes);
 
 app.use('/api/facturas', facturaRoutes);
 
+// Manejo centralizado de errores (siempre al final)
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
 
