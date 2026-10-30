@@ -2,8 +2,12 @@
 import { Router } from 'express';
 import { FacturaController } from '../controllers/factura.controller';
 import { uploadMiddleware } from '../middleware/upload.middleware';
+import { authMiddleware } from '../middleware/auth.middleware';
 
 const router = Router();
+
+// Todas las rutas de facturas requieren un JWT válido
+router.use(authMiddleware);
 
 // POST /api/facturas - Carga de archivo e invocación LLM
 router.post('/', uploadMiddleware.single('archivo'), FacturaController.cargar);

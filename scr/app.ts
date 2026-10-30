@@ -6,10 +6,14 @@ import dotenv from 'dotenv';
 // Importación de rutas
 import authRoutes from './routes/auth.routes';
 import facturaRoutes from './routes/factura.routes';
+import { auditMiddleware } from './middleware/audit.middleware';
 
 dotenv.config();
 
 const app = express();
+
+// Auditoría de todas las peticiones (primero, para capturar también errores de parseo)
+app.use(auditMiddleware);
 
 // Middlewares básicos
 app.use(cors());

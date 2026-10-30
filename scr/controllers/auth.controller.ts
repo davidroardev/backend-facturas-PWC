@@ -7,7 +7,8 @@ export class AuthController {
         try {
             const { nombre, correo, contrasena, telefono } = req.body;
             const usuario = await AuthService.registrarUsuario({ nombre, correo, contrasena, telefono });
-            res.status(201).json({ ok: true, usuario });
+            const token = AuthService.generarToken(usuario);
+            res.status(201).json({ ok: true, usuario, token });
         } catch (error: any) {
             res.status(400).json({ ok: false, mensaje: error.message });
         }
@@ -17,8 +18,13 @@ export class AuthController {
         try {
             const { correo, contrasena } = req.body;
             const usuario = await AuthService.login(correo, contrasena);
-          // Nota: Más adelante generaremos el Token JWT aquí
-            res.status(200).json({ ok: true, usuario: { id: usuario.id, nombre: usuario.nombre, correo: usuario.correo } });
+            const token = AuthService.generarToken(usuario);
+          // Token JWT para consumir los endpoints protegidos
+            res.status(200).json({
+                ok: true,
+                usuario: { id: usuario.id, nombre: usuario.nombre, correo: usuario.correo },
+                token,
+            });
         } catch (error: any) {
             res.status(401).json({ ok: false, mensaje: error.message });
             }

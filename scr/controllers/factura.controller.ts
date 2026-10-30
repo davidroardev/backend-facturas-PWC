@@ -13,8 +13,12 @@ export class FacturaController {
                 return res.status(400).json({ ok: false, mensaje: 'Debe adjuntar un archivo válido (PDF, PNG o JPG).' });
             }
 
-            // temporalmente asignamos id 1 hasta conectar el middleware de auth JWT
-            const usuarioId = (req as any).user?.id || 2; 
+            // El id proviene del JWT validado por authMiddleware
+            const usuarioId = (req as any).user?.id;
+
+            if (!usuarioId) {
+                return res.status(401).json({ ok: false, mensaje: 'Usuario no autenticado.' });
+            }
 
             // 1. Invocar extracción del LLM
             const { datos, rawJson } = await LlmService.extraerDatosFactura(

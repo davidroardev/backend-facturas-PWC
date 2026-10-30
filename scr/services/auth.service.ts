@@ -1,6 +1,30 @@
 // src/services/auth.service.ts
+import 'dotenv/config';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 import { prisma } from '../config/prisma';
 import bcrypt from 'bcrypt';
+
+export interface TokenPayload {
+    id: number;
+    correo: string;
+    nombre: string;
+}
+
+const JWT_SECRET = process.env.JWT_SECRET?.trim() || '';
+
+if (!JWT_SECRET) {
+    throw new Error('Falta la variable de entorno JWT_SECRET en el archivo .env');
+}
+
+const OPCIONES_FIRMA: jwt.SignOptions = {
+    expiresIn: (process.env.JWT_EXPIRES_IN?.trim() || '8h') as NonNullable<jwt.SignOptions['expiresIn']>,
+};
+
+function errorDeToken(mensaje: string): Error & { statusCode: number } {
+    const error = new Error(mensaje) as Error & { statusCode: number };
+    error.statusCode = 401;
+    return error;
+}
 
 export class AuthService {
     static async registrarUsuario(datos: { nombre: string; correo: string; contrasena: string; telefono?: string }) {
@@ -50,5 +74,46 @@ export class AuthService {
         }
 
             return usuario;
+    }
+
+    /** Firma un JWT con los datos mínimos del usuario autenticado. */
+    static generarToken(usuario: TokenPayload): string {
+        const payload: TokenPayload = {
+            id: usuario.id,
+            correo: usuario.correo,
+            nombre: usuario.nombre,
+        };
+
+        return jwt.sign(payload, JWT_SECRET, OPCIONES_FIRMA);
+    }
+
+    /** Verifica la firma y la vigencia del JWT. Lanza error 401 si no es válido. */
+    static verificarToken(token: string): TokenPayload {
+        let decodificado: string | JwtPayload;
+
+        try {
+            decodificado = jwt.verify(token, JWT_SECRET);
+        } catch (error) {
+            if (error instanceof Error && error.name === 'TokenExpiredError') {
+                throw errorDeToken('El token expiró, inicie sesión nuevamente');
+            }
+
+            throw errorDeToken('Token inválido');
+        }
+
+        if (
+            typeof decodificado === 'string' ||
+            typeof decodificado.id !== 'number' ||
+            typeof decodificado.correo !== 'string' ||
+            typeof decodificado.nombre !== 'string'
+        ) {
+            throw errorDeToken('Token inválido');
+        }
+
+        return {
+            id: decodificado.id,
+            correo: decodificado.correo,
+            nombre: decodificado.nombre,
+        };
     }
 }
