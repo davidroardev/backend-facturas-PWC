@@ -1,5 +1,6 @@
 import { prisma } from '../config/prisma'
 import { HttpError } from '../errors/http-error';
+import type { Prisma } from '@prisma/client';
 import { FacturaExtraidaLLM } from './llm.service';
 
 export class FacturaService {
@@ -101,6 +102,7 @@ export class FacturaService {
         page?: string;
         pageSize?: string;
         proveedorId?: string;
+        proveedorNombre?: string;
         fechaInicio?: string;
         fechaFin?: string;
     }) {
@@ -113,6 +115,15 @@ export class FacturaService {
 
         if (query.proveedorId) {
             whereClause.proveedorId = Number(query.proveedorId);
+        }
+
+        if (query.proveedorNombre?.trim()) {
+            whereClause.proveedor = {
+                nombre: {
+                    contains: query.proveedorNombre.trim(),
+                    mode: 'insensitive',
+                },
+            };
         }
 
         if (query.fechaInicio || query.fechaFin) {
@@ -171,21 +182,107 @@ export class FacturaService {
     
     static async actualizarFactura(id: number, data:{
         numeroFactura?: string,
-        valorAPagar?: number,
-        tipoMoneda?: string,
-        fechaEmision?: Date,
-        fechaLimitePago?: Date,
-        numeroContrato?: string,
-        provedorId?: number,
-        tipoFacturaId?: number,
+        numeroContrato?: string | null,
+        numeroCliente?: string | null,
+        valorAPagar?: number | string,
+        tipoDeMoneda?: string,
+        fechaEmision?: string | Date | null,
+        fechaLimitePago?: string | Date | null,
+        proveedorId?: number,
+        tipoFacturaId?: number | null,
         usuarioSubidaId?: number
     }) {
         this.validarId(id);
 
+        // se normaliza a medianoche UTC para no desplazar el día.
+        const normalizarFecha = (
+            valor: string | Date | null,
+            campo: string,
+        ): Date | null => {
+            if (valor === null || valor === '') return null;
+
+            const fecha = valor instanceof Date ? valor : new Date(valor);
+
+            if (Number.isNaN(fecha.getTime())) {
+                throw HttpError.badRequest(
+                    `El campo ${campo} no contiene una fecha válida.`,
+                    { codigo: 'FECHA_INVALIDA' },
+                );
+            }
+
+            return fecha;
+        };
+
+        const normalizarNumero = (valor: string, campo: string): string => {
+            const limpio = valor.trim();
+
+            if (!limpio) {
+                throw HttpError.badRequest(`El campo ${campo} no puede estar vacío.`, {
+                    codigo: 'CAMPO_REQUERIDO',
+                });
+            }
+
+            return limpio;
+        };
+
+        let valorNormalizado: number | undefined;
+
+        if (data.valorAPagar !== undefined) {
+            valorNormalizado = Number(data.valorAPagar);
+
+            if (!Number.isFinite(valorNormalizado) || valorNormalizado <= 0) {
+                throw HttpError.badRequest(
+                    'El valor a pagar debe ser un número mayor a 0.',
+                    { codigo: 'VALOR_INVALIDO' },
+                );
+            }
+        }
+
+        let monedaNormalizada: string | undefined;
+
+        if (data.tipoDeMoneda !== undefined) {
+            monedaNormalizada = data.tipoDeMoneda.trim().toUpperCase();
+
+            if (monedaNormalizada.length < 1 || monedaNormalizada.length > 3) {
+                throw HttpError.badRequest(
+                    'La moneda debe tener entre 1 y 3 caracteres (por ejemplo COP o USD).',
+                    { codigo: 'MONEDA_INVALIDA' },
+                );
+            }
+        }
+
+        const datos: Prisma.FacturaUncheckedUpdateInput = {
+            ...(data.numeroFactura !== undefined
+                ? { numeroFactura: normalizarNumero(data.numeroFactura, 'numeroFactura') }
+                : {}),
+            ...(data.numeroContrato !== undefined
+                ? { numeroContrato: data.numeroContrato?.trim() || null }
+                : {}),
+            ...(data.numeroCliente !== undefined
+                ? { numeroCliente: data.numeroCliente?.trim() || null }
+                : {}),
+            ...(valorNormalizado !== undefined ? { valorAPagar: valorNormalizado } : {}),
+            ...(monedaNormalizada !== undefined ? { tipoDeMoneda: monedaNormalizada } : {}),
+            ...(data.fechaEmision !== undefined
+                ? { fechaEmision: normalizarFecha(data.fechaEmision, 'fechaEmision') }
+                : {}),
+            ...(data.fechaLimitePago !== undefined
+                ? { fechaLimitePago: normalizarFecha(data.fechaLimitePago, 'fechaLimitePago') }
+                : {}),
+            ...(data.proveedorId !== undefined
+                ? { proveedorId: data.proveedorId }
+                : {}),
+            ...(data.tipoFacturaId !== undefined
+                ? { tipoFacturaId: data.tipoFacturaId }
+                : {}),
+            ...(data.usuarioSubidaId !== undefined
+                ? { usuarioSubidaId: data.usuarioSubidaId }
+                : {}),
+        };
+
         return prisma.factura.update({
             where: { id },
-            data
-            
+            data: datos
         })
     }
 

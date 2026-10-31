@@ -23,7 +23,6 @@ app.use(express.urlencoded({ extended: true }));
 
 // Definición de Rutas Principales
 app.use('/api/auth', authRoutes);
-
 app.use('/api/facturas', facturaRoutes);
 
 // Manejo centralizado de errores (siempre al final)
